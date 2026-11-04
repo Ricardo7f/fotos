@@ -41,6 +41,8 @@ main{max-width:560px;margin:0 auto;padding:4px 16px 28px}
 h2{margin:0 0 4px;font-size:19px;letter-spacing:-.01em}
 .hint{margin:0 0 14px;color:var(--mut);font-size:14px}
 label{display:block;font-weight:600;font-size:14px;color:var(--mut)}
+textarea{width:100%;padding:12px 14px;margin:6px 0 14px;border:1.5px solid var(--line);border-radius:14px;font:16px "Public Sans",sans-serif;background:var(--bg);color:var(--ink);resize:vertical}
+textarea:focus-visible{border-color:var(--pri)}
 input,select{width:100%;min-height:52px;padding:0 14px;margin:6px 0 14px;border:1.5px solid var(--line);border-radius:14px;font:16px "Public Sans",sans-serif;background:var(--bg);color:var(--ink)}
 :focus-visible{outline:3px solid color-mix(in srgb,var(--pri) 40%,transparent);outline-offset:2px}
 input:focus-visible,select:focus-visible{border-color:var(--pri)}
@@ -131,7 +133,7 @@ body.adm main{max-width:1360px;padding:22px 28px 48px}
 <!-- USUÁRIO -->
 <section id="v-user" class="hidden">
   <div class="passo" id="passo"></div>
-  <div class="prog" id="prog"><i></i><i></i><i></i><i></i><i></i></div>
+  <div class="prog" id="prog"><i></i><i></i><i></i><i></i><i></i><i></i></div>
   <div class="card" id="s-occ">
     <h2>Qual é a ocorrência?</h2><p class="hint">Toque no tipo que você vai registrar.</p>
     <div id="occs" class="opts"></div>
@@ -148,11 +150,17 @@ body.adm main{max-width:1360px;padding:22px 28px 48px}
     <div class="err" id="ciderr"></div>
     <div class="row"><button class="b s" data-back="s-mat">Voltar</button><button class="b" id="cidNext">Continuar</button></div>
   </div>
+  <div class="card hidden" id="s-obs">
+    <h2>Observação <span class="mut" style="font-weight:500;font-size:14px">(opcional)</span></h2><p class="hint">Se quiser, escreva algo que a central precise saber. Pode deixar em branco.</p>
+    <textarea id="obs" rows="4" maxlength="500" placeholder="Ex.: portão azul, imóvel nos fundos"></textarea>
+    <div class="row"><button class="b s" data-back="s-cid">Voltar</button><button class="b" id="obsNext">Continuar</button></div>
+  </div>
   <div class="card hidden" id="s-conf">
     <h2>Confira os dados</h2><p class="hint">Se algo estiver errado, toque em Corrigir.</p>
     <div class="kv"><span>Ocorrência</span><b id="c-occ"></b></div>
     <div class="kv"><span>Matrícula</span><b id="c-mat"></b></div>
     <div class="kv"><span>Cidade</span><b id="c-cid"></b></div>
+    <div class="kv hidden" id="c-obsrow"><span>Observação</span><b id="c-obs" style="white-space:pre-wrap;word-break:break-word"></b></div>
     <div class="row"><button class="b s" id="confNo">Corrigir</button><button class="b g" id="confYes">Está tudo certo</button></div>
   </div>
   <div class="card hidden" id="s-foto">
@@ -236,7 +244,7 @@ const allEnvios = () => tx("readonly", s => s.getAll()).then(a => (a||[]).filter
 
 /* ---------- Util ---------- */
 const show = id => { document.body.classList.toggle("login", id==="v-login"); document.body.classList.toggle("adm", id==="v-admin"); document.querySelector("header b").textContent = id==="v-admin" ? "Painel de ocorrências" : "Ocorrências"; ["v-login","v-user","v-admin"].forEach(x => $(x).classList.toggle("hidden", x!==id)); };
-const PASSOS = ["s-occ","s-mat","s-cid","s-conf","s-foto"];
+const PASSOS = ["s-occ","s-mat","s-cid","s-obs","s-conf","s-foto"];
 const step = id => {
   PASSOS.forEach(x => $(x).classList.toggle("hidden", x!==id));
   const n = PASSOS.indexOf(id);
@@ -295,7 +303,7 @@ const ICONES = {"Alterar rota":"🧭","Alterar grupo":"👥","Refaturar":"🧾",
 $("occs").innerHTML = OCORRENCIAS.map(o => `<button class="opt" data-o="${o}"><span class="ic">${ICONES[o]||"•"}</span><span>${o}</span></button>`).join("");
 $("occs").onclick = e => { const b = e.target.closest(".opt"); if (b) { draft.occ = b.dataset.o; step("s-mat"); $("mat").focus(); } };
 document.querySelectorAll("[data-back]").forEach(b => b.onclick = () => step(b.dataset.back));
-function resetFluxo(){ draft = {occ:"",mat:"",cid:"",fotos:[]}; $("mat").value = $("cid").value = ""; renderThumbs(); step("s-occ"); }
+function resetFluxo(){ draft = {occ:"",mat:"",cid:"",obs:"",fotos:[]}; $("mat").value = $("cid").value = $("obs").value = ""; renderThumbs(); step("s-occ"); }
 
 $("matNext").onclick = () => {
   const v = $("mat").value.trim();
@@ -306,7 +314,12 @@ $("cidNext").onclick = () => {
   const v = $("cid").value.trim();
   if (!v) return $("ciderr").textContent = "Digite a cidade.";
   $("ciderr").textContent = ""; draft.cid = v;
+  step("s-obs"); $("obs").focus();
+};
+$("obsNext").onclick = () => {
+  draft.obs = $("obs").value.trim();
   $("c-occ").textContent = draft.occ; $("c-mat").textContent = draft.mat; $("c-cid").textContent = draft.cid;
+  $("c-obs").textContent = draft.obs; $("c-obsrow").classList.toggle("hidden", !draft.obs);
   step("s-conf");
 };
 $("confNo").onclick = () => step("s-mat");
@@ -342,7 +355,7 @@ $("btnSend").onclick = async () => {
   seq++;
   await putEnvio({
     id: me.uid + "_" + Date.now(), uid: me.uid, usuario: nome, seq, dia,
-    ocorrencia: draft.occ, matricula: draft.mat, cidade: draft.cid,
+    ocorrencia: draft.occ, matricula: draft.mat, cidade: draft.cid, observacao: draft.obs || "",
     fotos: draft.fotos, status: "pendente", criadoLocal: Date.now()
   });
   resetFluxo(); await renderFila(); sync();
@@ -389,7 +402,7 @@ async function sync(){
         }
         await db.collection("envios").doc(e.id).set({
           uid: e.uid, usuario: e.usuario, seq: e.seq, dia: e.dia, ocorrencia: e.ocorrencia,
-          matricula: e.matricula, cidade: e.cidade, qtd: e.fotos.length,
+          matricula: e.matricula, cidade: e.cidade, observacao: e.observacao || "", qtd: e.fotos.length,
           createdAt: firebase.firestore.FieldValue.serverTimestamp(),
           expireAt: firebase.firestore.Timestamp.fromMillis(Date.now() + DIAS*86400000)
         });
@@ -495,6 +508,7 @@ function renderAdmin(){
     const ini = (e.usuario||"?").trim().charAt(0);
     c.innerHTML = `<div class="ahead"><span class="av">${esc(ini)}</span><div><b>${esc(e.usuario)}</b><small>${dt}</small></div><span class="nn">nº ${e.seq}</span></div>
       <div class="chips"><span class="chip oc">${esc(e.ocorrencia)}</span><span class="chip">Mat. ${esc(e.matricula)}</span><span class="chip">${esc(e.cidade)}</span><span class="chip">${e.qtd||0} foto(s)</span></div>
+      ${e.observacao ? `<div style="margin-top:10px;font-size:14px;white-space:pre-wrap;word-break:break-word"><span class="mut">Obs.:</span> ${esc(e.observacao)}</div>` : ""}
       <div class="thumbs"><span class="mut">Carregando fotos...</span></div>
       <div class="mut" style="font-size:13px">Apaga em ${exp} dia(s)</div>`;
     carregarFotos(e.id, c.querySelector(".thumbs"));
@@ -534,6 +548,10 @@ async function gerarPdf(){
       pdf.setFontSize(10); pdf.setFont(undefined,"normal");
       pdf.text("Usuário: " + e.usuario + "   Data: " + dataEnvio(e).toLocaleString("pt-BR"), M, y); y += 5;
       pdf.text("Matrícula: " + e.matricula + "   Cidade: " + e.cidade, M, y); y += 6;
+      if (e.observacao) {
+        const ol = pdf.splitTextToSize("Observação: " + e.observacao, W - 2*M);
+        pdf.text(ol, M, y); y += ol.length * 5 + 1;
+      }
       let rowY = y;
       for (let i = 0; i < fotos.length; i++) {
         const col = i % 2;

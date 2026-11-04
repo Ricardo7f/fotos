@@ -1,5 +1,5 @@
 // Service worker: deixa o app abrir sem internet (a fila de envios já fica no IndexedDB)
-const VERSAO = "v5";
+const VERSAO = "v6";
 const CACHE = "ocorrencias-" + VERSAO;
 const SHELL = ["./", "./index.html", "./manifest.json", "./icon-192.png", "./icon-512.png"];
 
