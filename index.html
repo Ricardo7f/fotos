@@ -87,6 +87,8 @@ input:focus-visible,select:focus-visible{border-color:var(--pri)}
 .chips{display:flex;flex-wrap:wrap;gap:6px;margin:12px 0 2px}
 .chip{padding:5px 11px;border-radius:99px;background:var(--bg);border:1px solid var(--line);font-size:13px;font-weight:600}
 .chip.oc{background:var(--pri);border-color:var(--pri);color:var(--onp)}
+#resumoModal{position:fixed;inset:0;background:rgba(3,15,19,.7);display:flex;align-items:center;justify-content:center;z-index:8;padding:16px}
+#resumoModal .card{width:100%;max-width:480px;margin:0;max-height:100%;overflow:auto}
 #big{position:fixed;inset:0;background:rgba(3,15,19,.94);display:flex;align-items:center;justify-content:center;z-index:9;padding:12px}
 #big img{max-width:100%;max-height:100%;border-radius:12px}
 body.adm header{padding:calc(env(safe-area-inset-top) + 12px) 28px 14px}
@@ -164,14 +166,14 @@ body.adm main{max-width:1360px;padding:22px 28px 48px}
     <div class="row"><button class="b s" id="confNo">Corrigir</button><button class="b g" id="confYes">Está tudo certo</button></div>
   </div>
   <div class="card hidden" id="s-foto">
-    <h2>Fotos da ocorrência</h2><p class="hint">Tire quantas fotos precisar. Pode tirar mais de uma vez.</p>
+    <h2>Fotos da ocorrência <span class="mut" style="font-weight:500;font-size:14px">(opcional)</span></h2><p class="hint">Tire quantas fotos precisar, ou envie sem fotos.</p>
     <input id="cam" type="file" accept="image/*" capture="environment" multiple class="hidden">
     <input id="gal" type="file" accept="image/*" multiple class="hidden">
     <div class="row"><button class="b" id="btnCam">📷 Tirar foto</button><button class="b s" id="btnGal">🖼 Galeria</button></div>
     <div class="cnt" id="cnt">Nenhuma foto ainda</div>
     <div class="thumbs" id="thumbs"></div>
     <div class="err" id="fotoerr"></div>
-    <div class="row"><button class="b s" id="fotoCancel">Cancelar</button><button class="b g" id="btnSend" disabled>Enviar fotos</button></div>
+    <div class="row"><button class="b s" id="fotoCancel">Cancelar</button><button class="b g" id="btnSend">Enviar</button></div>
   </div>
   <div class="card">
     <h2>Meus envios de hoje</h2>
@@ -196,6 +198,17 @@ body.adm main{max-width:1360px;padding:22px 28px 48px}
   <div id="lista" class="agrid"></div>
 </section>
 </main>
+<div id="resumoModal" class="hidden">
+  <div class="card">
+    <h2>Confirmar envio</h2><p class="hint">Confira o resumo antes de enviar.</p>
+    <div class="kv"><span>Ocorrência</span><b id="r-occ"></b></div>
+    <div class="kv"><span>Matrícula</span><b id="r-mat"></b></div>
+    <div class="kv"><span>Cidade</span><b id="r-cid"></b></div>
+    <div class="kv hidden" id="r-obsrow"><span>Observação</span><b id="r-obs" style="white-space:pre-wrap;word-break:break-word"></b></div>
+    <div class="kv"><span>Fotos</span><b id="r-fotos"></b></div>
+    <div class="row"><button class="b s" id="rVoltar">Voltar</button><button class="b g" id="rOk">Confirmar envio</button></div>
+  </div>
+</div>
 <div id="big" class="hidden"><button id="bClose" aria-label="Fechar">×</button><button id="bPrev" aria-label="Foto anterior">‹</button><img alt=""><button id="bNext" aria-label="Próxima foto">›</button><div id="bCnt"></div></div>
 
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
@@ -341,13 +354,19 @@ function renderThumbs(){
     x.className = "rm"; x.textContent = "×"; x.onclick = () => { draft.fotos.splice(i,1); renderThumbs(); };
     d.append(im, x); $("thumbs").append(d);
   });
-  $("btnSend").disabled = !draft.fotos.length;
-  $("cnt").textContent = draft.fotos.length ? draft.fotos.length + " foto(s) prontas para enviar" : "Nenhuma foto ainda";
+  $("cnt").textContent = draft.fotos.length ? draft.fotos.length + " foto(s) prontas para enviar" : "Nenhuma foto ainda (opcional)";
 }
 $("fotoCancel").onclick = () => { if (!draft.fotos.length || confirm("Descartar este envio?")) resetFluxo(); };
 
-$("btnSend").onclick = async () => {
-  if (!draft.fotos.length) return $("fotoerr").textContent = "Tire ao menos uma foto.";
+$("btnSend").onclick = () => {
+  $("r-occ").textContent = draft.occ; $("r-mat").textContent = draft.mat; $("r-cid").textContent = draft.cid;
+  $("r-obs").textContent = draft.obs || ""; $("r-obsrow").classList.toggle("hidden", !draft.obs);
+  $("r-fotos").textContent = draft.fotos.length ? draft.fotos.length + " foto(s)" : "Sem fotos";
+  $("resumoModal").classList.remove("hidden");
+};
+$("rVoltar").onclick = () => $("resumoModal").classList.add("hidden");
+$("rOk").onclick = async () => {
+  $("resumoModal").classList.add("hidden");
   const dia = ymd(new Date());
   const lista = (await allEnvios()).filter(x => x.dia === dia);
   let seq = Math.max(0, ...lista.map(x => x.seq));
@@ -451,7 +470,7 @@ function buscarFotos(id){
 async function carregarFotos(id, box){
   try {
     const l = await buscarFotos(id);
-    box.innerHTML = "";
+    box.innerHTML = l.length ? "" : '<span class="mut">Sem fotos</span>';
     const todas = l.map(x => x.data);
     l.forEach((f,k) => {
       const d = document.createElement("div"), im = document.createElement("img");
@@ -511,7 +530,8 @@ function renderAdmin(){
       ${e.observacao ? `<div style="margin-top:10px;font-size:14px;white-space:pre-wrap;word-break:break-word"><span class="mut">Obs.:</span> ${esc(e.observacao)}</div>` : ""}
       <div class="thumbs"><span class="mut">Carregando fotos...</span></div>
       <div class="mut" style="font-size:13px">Apaga em ${exp} dia(s)</div>`;
-    carregarFotos(e.id, c.querySelector(".thumbs"));
+    if (e.qtd === 0) c.querySelector(".thumbs").innerHTML = '<span class="mut">Sem fotos</span>';
+    else carregarFotos(e.id, c.querySelector(".thumbs"));
     $("lista").append(c);
   });
 }
